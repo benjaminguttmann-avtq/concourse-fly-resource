@@ -1,7 +1,6 @@
 name: Build and publish resource image
 
 on:
-  pull_request:
   push:
     branches:
       - master
