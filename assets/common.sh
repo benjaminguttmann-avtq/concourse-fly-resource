@@ -1,15 +1,34 @@
 FLY=/usr/local/bin/fly
 
+fly_architecture() {
+  local machine_architecture=${1:-$(uname -m)}
+
+  case "$machine_architecture" in
+    x86_64|amd64)
+      echo amd64
+      ;;
+    aarch64|arm64)
+      echo arm64
+      ;;
+    *)
+      echo "Unsupported architecture: $machine_architecture" >&2
+      return 1
+      ;;
+  esac
+}
+
 fetch_fly() {
   local url=$1
   local insecure=$2
+  local architecture
 
   local insecure_arg=""
   test "$insecure" = "true" && insecure_arg="--insecure"
 
   if ! [ -x $FLY ]; then
     echo "Fetching fly..."
-    curl -fSsL $insecure_arg "$url/api/v1/cli?arch=amd64&platform=linux" -o "$FLY"
+    architecture=$(fly_architecture) || return 1
+    curl -fSsL $insecure_arg "$url/api/v1/cli?arch=$architecture&platform=linux" -o "$FLY"
     chmod +x "$FLY"
   fi
 }

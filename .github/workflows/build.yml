@@ -1,0 +1,136 @@
+name: Build and publish resource image
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+
+env:
+  IMAGE_NAME: docker.io/bguttmannavtq/concourse-fly-resource
+
+jobs:
+  test:
+    name: Test ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            architecture: amd64
+          - platform: linux/arm64
+            architecture: arm64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: tests
+          platforms: ${{ matrix.platform }}
+          build-args: base_image=alpine:edge
+          tags: concourse-fly-resource:test-${{ matrix.architecture }}
+          load: true
+
+      - name: Test resource entrypoints
+        run: |
+          test "$(printf '{}' | docker run --rm -i concourse-fly-resource:test-${{ matrix.architecture }} /opt/resource/check)" = '[]'
+          test "$(printf '{}' | docker run --rm -i concourse-fly-resource:test-${{ matrix.architecture }} /opt/resource/in)" = '{"version":{}}'
+
+      - name: Test architecture mapping
+        shell: bash
+        run: |
+          source assets/common.sh
+          test "$(fly_architecture x86_64)" = amd64
+          test "$(fly_architecture amd64)" = amd64
+          test "$(fly_architecture aarch64)" = arm64
+          test "$(fly_architecture arm64)" = arm64
+
+  scan:
+    name: Scan image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: resource
+          platforms: linux/amd64
+          build-args: base_image=alpine:edge
+          tags: concourse-fly-resource:scan
+          load: true
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: concourse-fly-resource:scan
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  publish:
+    name: Publish image
+    if: github.event_name == 'push'
+    needs:
+      - test
+      - scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: bguttmannavtq
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: resource
+          platforms: linux/amd64,linux/arm64
+          build-args: base_image=alpine:edge
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
