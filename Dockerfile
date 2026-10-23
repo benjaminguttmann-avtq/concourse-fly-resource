@@ -1,4 +1,4 @@
-ARG base_image=cgr.dev/chainguard/wolfi-base:latest
+ARG base_image=alpine:edge
 
 FROM ${base_image} AS resource
 
