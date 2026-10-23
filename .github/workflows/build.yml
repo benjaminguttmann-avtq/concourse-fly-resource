@@ -6,6 +6,8 @@ on:
       - master
     tags:
       - 'v*'
+  schedule:
+    - cron: '17 6 * * 1'
 
 env:
   IMAGE_NAME: docker.io/bguttmannavtq/concourse-fly-resource
@@ -38,6 +40,7 @@ jobs:
         with:
           context: .
           target: tests
+          pull: true
           platforms: ${{ matrix.platform }}
           build-args: base_image=alpine:edge
           tags: concourse-fly-resource:test-${{ matrix.architecture }}
@@ -73,6 +76,7 @@ jobs:
         with:
           context: .
           target: resource
+          pull: true
           platforms: linux/amd64
           build-args: base_image=alpine:edge
           tags: concourse-fly-resource:scan
@@ -90,7 +94,7 @@ jobs:
 
   publish:
     name: Publish image
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'schedule'
     needs:
       - test
       - scan
@@ -128,6 +132,7 @@ jobs:
         with:
           context: .
           target: resource
+          pull: true
           platforms: linux/amd64,linux/arm64
           build-args: base_image=alpine:edge
           push: true
