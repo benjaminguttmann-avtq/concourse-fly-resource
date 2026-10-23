@@ -39,7 +39,7 @@ jobs:
           context: .
           target: tests
           platforms: ${{ matrix.platform }}
-          build-args: base_image=cgr.dev/chainguard/wolfi-base:latest
+          build-args: base_image=alpine:edge
           tags: concourse-fly-resource:test-${{ matrix.architecture }}
           load: true
 
@@ -74,7 +74,7 @@ jobs:
           context: .
           target: resource
           platforms: linux/amd64
-          build-args: base_image=cgr.dev/chainguard/wolfi-base:latest
+          build-args: base_image=alpine:edge
           tags: concourse-fly-resource:scan
           load: true
 
@@ -122,7 +122,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -130,7 +129,7 @@ jobs:
           context: .
           target: resource
           platforms: linux/amd64,linux/arm64
-          build-args: base_image=cgr.dev/chainguard/wolfi-base:latest
+          build-args: base_image=alpine:edge
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
